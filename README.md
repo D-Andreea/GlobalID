@@ -1,6 +1,6 @@
 # GlobalId
 
-**TODO: Add description**
+Mini-project to generate a globally unique id.
 
 ## Installation
 
