@@ -7,7 +7,7 @@ defmodule GlobalId do
   # To generate a guaranteed globally unique id, 3 components were used:
   # 1. node id: ensures unicity of ids between nodes (max value 1023 => 10 bits)
   # 2. timestamp: ensures unicity of ids in case of a node or system failure (44 bits reserved)
-  # 3. random number: ensures unicity between ids generated in the same milisecond, at the same node (max value 512 => 9 bits)
+  # 3. counter: ensures unicity between ids generated concurrent in the same millisecond, at the same node (max value 512 => 9 bits)
   # 
   #
   # This method is guaranteed globally unique because of it's timestamp and random number combination. 
@@ -16,15 +16,7 @@ defmodule GlobalId do
   # 
 
 
-  @ doc """
-    Generates a random number between 0 and 512 (exclusive) (maximum 9 bits)
-  """
-  def get_random_number() do
-      :rand.uniform(512) - 1
-  end
-
-
-  @ doc """
+  @doc """
     Converts a bitstring to its integer equivalent
   """
   def get_int64(<<num::signed-integer-size(64)>>) do
@@ -32,7 +24,7 @@ defmodule GlobalId do
   end
 
 
-  @ doc """
+  @doc """
     Generates a timestamp in miliseconds, by substracting the timestamp for 2020-01-01 from the system time
   """
   def generate_timestamp() do
@@ -64,19 +56,29 @@ defmodule GlobalId do
   Please implement the following function.
   64 bit non negative integer output   
   """
-  @spec get_id() :: non_neg_integer
-  def get_id() do # this function does not need any parameters
+  @spec get_id(pid()) :: non_neg_integer
+  def get_id(bucket) do # this function requires the pid for Counter module
       # getting the node id
       node_id = node_id()
 
       # getting the timestamp
       timestamp = generate_timestamp()
       
-      # getting a random number
-      random_number = get_random_number()
+      # calling the Counter API to get the counter
+      counter = Counter.get_counter(bucket, node_id, timestamp)
 
-      # getting the id formed from node id, timestamp and the random number generated above
-      generate_id(node_id, timestamp, random_number)
+      cond do
+        counter >= 512 ->
+          # if there are more than 512 requests per milisecond for an id, wait a milisecond before generating a new counter
+          Process.sleep(1)
+          counter = Counter.get_counter(bucket, node_id, timestamp)
+
+          # getting the id formed from node id, timestamp and the random number generated above
+          generate_id(node_id, timestamp, counter)
+        counter < 512 ->
+          # getting the id formed from node id, timestamp and the random number generated above
+          generate_id(node_id, timestamp, counter)
+      end      
   end
 
 
